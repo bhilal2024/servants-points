@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>نظام نقاط الخدام</title><link rel="icon" href="data:,">
+<style>
+:root{--bg:#f5f3ee;--card:#fff;--tx:#1e2430;--mut:#6b7280;--pri:#7a1f2b;--bd:#e3ded3;--ok:#1d7a46;--danger:#b42318;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15171c;--card:#1f222a;--tx:#eceef2;--mut:#9aa1ae;--pri:#d9707e;--bd:#323644;--ok:#4cc38a;--danger:#f07b72}}
+:root[data-theme="dark"]{--bg:#15171c;--card:#1f222a;--tx:#eceef2;--mut:#9aa1ae;--pri:#d9707e;--bd:#323644;--ok:#4cc38a;--danger:#f07b72}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font-family:Tahoma,Arial,sans-serif;font-size:15px}
+header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--card);border-bottom:1px solid var(--bd);gap:8px;flex-wrap:wrap}
+h1{font-size:17px;margin:0;color:var(--pri)}
+nav{display:flex;gap:6px;overflow-x:auto;padding:10px 14px}
+nav button{white-space:nowrap;background:var(--card);color:var(--tx);border:1px solid var(--bd);padding:8px 12px;border-radius:20px;cursor:pointer;font:inherit}
+nav button.on{background:var(--pri);color:#fff;border-color:var(--pri)}
+main{max-width:900px;margin:0 auto;padding:6px 14px 30px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:14px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px}
+label{display:flex;flex-direction:column;font-size:12px;color:var(--mut);gap:3px}
+input,select{font:inherit;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);min-width:130px}
+button.b{background:var(--pri);color:#fff;border:0;padding:9px 14px;border-radius:8px;cursor:pointer;font:inherit}
+button.s{background:none;border:1px solid var(--bd);color:var(--tx);padding:4px 9px;border-radius:6px;cursor:pointer;font:inherit;font-size:13px}
+button.d{color:var(--danger)}
+.tw{overflow-x:auto}table{width:100%;border-collapse:collapse}th,td{padding:8px;border-bottom:1px solid var(--bd);text-align:right;white-space:nowrap}th{color:var(--mut);font-size:13px}
+.pts{font-weight:bold;color:var(--ok)}.mut{color:var(--mut)}
+#login{max-width:340px;margin:12vh auto;padding:0 14px}#login input{width:100%;margin-bottom:10px}
+.perm{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0}.perm label{flex-direction:row;align-items:center;color:var(--tx);font-size:14px}.perm input{min-width:0}
+</style></head><body>
+<div id="app"></div>
+<script>
+const SC=[{id:'servants',t:'بيانات الخدام'},{id:'points',t:'نقاط الخدام'},{id:'att',t:'الحضور الأسبوعي'},
+{id:'dawa',t:'التفاعل على الدعوة',p:1},{id:'prep',t:'تحضير الاجتماع',p:10},{id:'deco',t:'حضور الديكور في الميعاد',p:2},
+{id:'mass',t:'حضور القداس',p:3},{id:'fin',t:'المالية',p:2},{id:'users',t:'المستخدمين'}];
+const COLS=['servants','att','dawa','prep','deco','mass','fin','users'];
+const DAYS={'الجمعة':2,'الثلاثاء':3};
+const D={};COLS.forEach(c=>D[c]=[]);
+let db=null,me=null,cur=null,edit=null,ready=0;
+const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const today=()=>new Date().toISOString().slice(0,10);
+const uid=()=>Math.random().toString(36).slice(2,10);
+
+// ---- storage layer (Google Sheets via Apps Script)
+const API='https://script.google.com/macros/s/AKfycbyTmqLTcpD94NUN7VLi2BUQcNBq0bDVl_Le6ft0PyOgPi7qZaca_BhQQ0mpEDzVxkSJlg/exec';
+let last='';
+async function load(){
+  try{
+    const r=await(await fetch(API)).json(),j=JSON.stringify(r);
+    if(j===last)return;
+    if(last&&/INPUT|SELECT/.test(document.activeElement.tagName))return;
+    last=j;COLS.forEach(c=>D[c]=r[c]||[]);ready=1;
+    if(!D.users.length)seedAdmin();else render();
+  }catch(e){}
+}
+async function save(c,o){
+  if(!o.id)o.id=uid();
+  const i=D[c].findIndex(x=>x.id===o.id);i<0?D[c].push(o):D[c][i]=o;
+  last='';setTimeout(render,0);
+  try{await fetch(API,{method:'POST',body:JSON.stringify({action:'set',col:c,doc:o})})}catch(e){alert('تعذر الحفظ')}
+}
+async function del(c,id){
+  if(!confirm('تأكيد الحذف؟'))return;
+  D[c]=D[c].filter(x=>x.id!==id);last='';render();
+  try{await fetch(API,{method:'POST',body:JSON.stringify({action:'del',col:c,id})})}catch(e){alert('تعذر الحذف')}
+}
+function init(){render();load();setInterval(load,6000)}
+function seedAdmin(){
+  if(!D.users.length)save('users',{id:'admin',name:'المدير',username:'admin',password:'admin',perms:SC.map(s=>s.id)});
+}
+
+// ---- helpers
+const sName=id=>(D.servants.find(s=>s.id===id)||{}).name||'(محذوف)';
+const can=id=>me&&(me.perms||[]).includes(id);
+const total=id=>['att','dawa','prep','deco','mass','fin'].reduce((t,c)=>t+D[c].filter(r=>r.sid===id).reduce((a,r)=>a+(+r.pts||0),0),0);
+const sOpts=sel=>D.servants.map(s=>`<option value="${s.id}" ${s.id===sel?'selected':''}>${esc(s.name)}</option>`).join('');
+
+// ---- views
+function render(){
+  const A=$('#app');
+  if(!me){
+    A.innerHTML=`<div id="login" class="card"><h1>نظام نقاط الخدام</h1><p class="mut">سجّل الدخول</p>
+    <input id="lu" placeholder="اسم المستخدم" autocomplete="username"><input id="lp" type="password" placeholder="كلمة المرور" autocomplete="current-password">
+    <button class="b" style="width:100%" onclick="login()">دخول</button><p id="le" style="color:var(--danger)"></p></div>`;
+    return}
+  me=D.users.find(u=>u.id===me.id)||me;
+  const vis=SC.filter(s=>can(s.id));
+  if(!cur||!can(cur))cur=vis[0]&&vis[0].id;
+  A.innerHTML=`<header><h1>نظام نقاط الخدام</h1><span class="mut">${esc(me.name)} <button class="s" onclick="me=null;render()">خروج</button></span></header>
+  <nav>${vis.map(s=>`<button class="${s.id===cur?'on':''}" onclick="cur='${s.id}';edit=null;render()">${s.t}</button>`).join('')}</nav>
+  <main>${cur?view(cur):'<div class="card">لا توجد صلاحيات لهذا المستخدم.</div>'}</main>`;
+}
+function login(){
+  const u=D.users.find(x=>x.username===$('#lu').value.trim()&&x.password===$('#lp').value);
+  if(!u){$('#le').textContent=ready?'بيانات الدخول غير صحيحة':'جارٍ التحميل... حاول مرة أخرى';return}
+  me=u;cur=null;render();
+}
+function view(id){
+  if(id==='servants')return servantsV();
+  if(id==='points')return pointsV();
+  if(id==='users')return usersV();
+  return logV(SC.find(s=>s.id===id));
+}
+function servantsV(){
+  const e=edit&&D.servants.find(s=>s.id===edit)||{};
+  return `<div class="card"><div class="row"><label>الاسم<input id="f1" value="${esc(e.name)}"></label>
+  <label>الجنس<select id="f2"><option ${e.sex==='ذكر'?'selected':''}>ذكر</option><option ${e.sex==='أنثى'?'selected':''}>أنثى</option></select></label>
+  <button class="b" onclick="saveServant()">${edit?'حفظ التعديل':'إضافة'}</button>${edit?'<button class="s" onclick="edit=null;render()">إلغاء</button>':''}</div>
+  <div class="tw"><table><tr><th>الاسم</th><th>الجنس</th><th></th></tr>${D.servants.map(s=>`<tr><td>${esc(s.name)}</td><td>${s.sex}</td>
+  <td><button class="s" onclick="edit='${s.id}';render()">تعديل</button> <button class="s d" onclick="del('servants','${s.id}')">حذف</button></td></tr>`).join('')}</table></div></div>`;
+}
+function saveServant(){const n=$('#f1').value.trim();if(!n)return;save('servants',{id:edit||undefined,name:n,sex:$('#f2').value});edit=null}
+function pointsV(){
+  const rows=D.servants.map(s=>({n:s.name,t:total(s.id)})).sort((a,b)=>b.t-a.t);
+  return `<div class="card"><div class="tw"><table><tr><th>#</th><th>اسم الخادم</th><th>إجمالي النقاط</th></tr>
+  ${rows.map((r,i)=>`<tr><td>${i+1}</td><td>${esc(r.n)}</td><td class="pts">${r.t}</td></tr>`).join('')||'<tr><td colspan=3 class="mut">لا يوجد خدام</td></tr>'}</table></div></div>`;
+}
+function logV(s){
+  const c=s.id,isAtt=c==='att',e=edit&&D[c].find(r=>r.id===edit)||{};
+  const rows=[...D[c]].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  return `<div class="card"><div class="row"><label>التاريخ<input type="date" id="g1" value="${e.date||today()}"></label>
+  <label>اسم الخادم<select id="g2">${sOpts(e.sid)}</select></label>
+  ${isAtt?`<label>اليوم<select id="g3">${Object.keys(DAYS).map(d=>`<option ${e.day===d?'selected':''}>${d}</option>`).join('')}</select></label>`:''}
+  <label>${isAtt?'النقاط':'الدرجة'}<input id="g4" type="number" value="${e.pts??(isAtt?2:s.p)}" ${isAtt?'readonly':''} style="min-width:80px"></label>
+  <button class="b" onclick="saveLog('${c}')">${edit?'حفظ التعديل':'إضافة'}</button>${edit?'<button class="s" onclick="edit=null;render()">إلغاء</button>':''}</div>
+  <div class="tw"><table><tr><th>التاريخ</th><th>اسم الخادم</th>${isAtt?'<th>اليوم</th>':''}<th>${isAtt?'النقاط':'الدرجة'}</th><th></th></tr>
+  ${rows.map(r=>`<tr><td>${r.date}</td><td>${esc(sName(r.sid))}</td>${isAtt?`<td>${r.day}</td>`:''}<td class="pts">${r.pts}</td>
+  <td><button class="s" onclick="edit='${r.id}';render()">تعديل</button> <button class="s d" onclick="del('${c}','${r.id}')">حذف</button></td></tr>`).join('')||'<tr><td colspan=5 class="mut">لا توجد حركات</td></tr>'}</table></div></div>`;
+}
+document.addEventListener('change',e=>{if(e.target.id==='g3')$('#g4').value=DAYS[e.target.value]});
+function saveLog(c){
+  const sid=$('#g2').value;if(!sid){alert('أضف خادمًا أولاً');return}
+  const o={id:edit||undefined,date:$('#g1').value,sid,pts:c==='att'?DAYS[$('#g3').value]:+$('#g4').value};
+  if(c==='att')o.day=$('#g3').value;save(c,o);edit=null;
+}
+function usersV(){
+  const e=edit&&D.users.find(u=>u.id===edit)||{perms:[]};
+  return `<div class="card"><div class="row"><label>الاسم<input id="u1" value="${esc(e.name)}"></label>
+  <label>اسم المستخدم<input id="u2" value="${esc(e.username)}"></label><label>كلمة المرور<input id="u3" value="${esc(e.password)}"></label></div>
+  <div class="mut">الشاشات المسموح بها:</div><div class="perm">${SC.map(s=>`<label><input type="checkbox" class="pc" value="${s.id}" ${(e.perms||[]).includes(s.id)?'checked':''}> ${s.t}</label>`).join('')}</div>
+  <button class="b" onclick="saveUser()">${edit?'حفظ التعديل':'إضافة مستخدم'}</button>${edit?' <button class="s" onclick="edit=null;render()">إلغاء</button>':''}</div>
+  <div class="card tw"><table><tr><th>الاسم</th><th>المستخدم</th><th>الشاشات</th><th></th></tr>${D.users.map(u=>`<tr><td>${esc(u.name)}</td><td>${esc(u.username)}</td>
+  <td style="white-space:normal">${(u.perms||[]).map(p=>SC.find(s=>s.id===p)?.t).join('، ')}</td>
+  <td><button class="s" onclick="edit='${u.id}';render()">تعديل</button> ${u.id===me.id?'':`<button class="s d" onclick="del('users','${u.id}')">حذف</button>`}</td></tr>`).join('')}</table></div>`;
+}
+function saveUser(){
+  const n=$('#u1').value.trim(),un=$('#u2').value.trim(),pw=$('#u3').value;
+  if(!n||!un||!pw){alert('أكمل كل البيانات');return}
+  if(D.users.some(u=>u.username===un&&u.id!==edit)){alert('اسم المستخدم مستخدم من قبل');return}
+  save('users',{id:edit||undefined,name:n,username:un,password:pw,perms:[...document.querySelectorAll('.pc:checked')].map(x=>x.value)});edit=null;
+}
+init();
+</script></body></html>
