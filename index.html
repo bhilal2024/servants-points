@@ -29,8 +29,8 @@ button.d{color:var(--danger)}
 <script>
 const SC=[{id:'servants',t:'بيانات الخدام'},{id:'points',t:'نقاط الخدام'},{id:'att',t:'الحضور الأسبوعي'},
 {id:'dawa',t:'التفاعل على الدعوة',p:1},{id:'prep',t:'تحضير الاجتماع',p:10},{id:'deco',t:'حضور الديكور في الميعاد',p:2},
-{id:'mass',t:'حضور القداس',p:3},{id:'fin',t:'المالية',p:2},{id:'users',t:'المستخدمين'}];
-const COLS=['servants','att','dawa','prep','deco','mass','fin','users'];
+{id:'mass',t:'حضور القداس',p:3},{id:'visit',t:'الافتقاد',p:3},{id:'fin',t:'المالية',p:2},{id:'users',t:'المستخدمين'}];
+const COLS=['servants','att','dawa','prep','deco','mass','visit','fin','users'];
 const DAYS={'الجمعة':2,'الثلاثاء':3};
 const D={};COLS.forEach(c=>D[c]=[]);
 let db=null,me=null,cur=null,edit=null,ready=0;
@@ -39,7 +39,7 @@ const today=()=>new Date().toISOString().slice(0,10);
 const uid=()=>Math.random().toString(36).slice(2,10);
 
 // ---- storage layer (Google Sheets via Apps Script)
-const API='https://script.google.com/macros/s/AKfycbyTmqLTcpD94NUN7VLi2BUQcNBq0bDVl_Le6ft0PyOgPi7qZaca_BhQQ0mpEDzVxkSJlg/exec';
+const API='https://script.google.com/macros/library/d/1jrhz7ty3fFgwsPPumWli1orcFVPRB6-SH_FlMB82sUKvu95kXHQ9Bd5y/1';
 let last='';
 async function load(){
   try{
@@ -68,8 +68,8 @@ function seedAdmin(){
 
 // ---- helpers
 const sName=id=>(D.servants.find(s=>s.id===id)||{}).name||'(محذوف)';
-const can=id=>me&&(me.perms||[]).includes(id);
-const total=id=>['att','dawa','prep','deco','mass','fin'].reduce((t,c)=>t+D[c].filter(r=>r.sid===id).reduce((a,r)=>a+(+r.pts||0),0),0);
+const can=id=>me&&(me.id==='admin'||(me.perms||[]).includes(id));
+const total=id=>['att','dawa','prep','deco','mass','visit','fin'].reduce((t,c)=>t+D[c].filter(r=>r.sid===id).reduce((a,r)=>a+(+r.pts||0),0),0);
 const sOpts=sel=>D.servants.map(s=>`<option value="${s.id}" ${s.id===sel?'selected':''}>${esc(s.name)}</option>`).join('');
 
 // ---- views
