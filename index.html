@@ -39,7 +39,7 @@ const today=()=>new Date().toISOString().slice(0,10);
 const uid=()=>Math.random().toString(36).slice(2,10);
 
 // ---- storage layer (Google Sheets via Apps Script)
-const API='https://script.google.com/macros/library/d/1jrhz7ty3fFgwsPPumWli1orcFVPRB6-SH_FlMB82sUKvu95kXHQ9Bd5y/1';
+const API='https://script.google.com/macros/s/AKfycbyTmqLTcpD94NUN7VLi2BUQcNBq0bDVl_Le6ft0PyOgPi7qZaca_BhQQ0mpEDzVxkSJlg/exec';
 let last='';
 async function load(){
   try{
